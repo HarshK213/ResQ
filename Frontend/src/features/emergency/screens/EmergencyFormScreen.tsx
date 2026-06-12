@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { colors, fontSize, spacing, borderRadius } from '../../../config/theme';
 import Input from '../../../components/Input';
@@ -65,7 +66,13 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
     const result = await createEmergency(payload);
 
     if (result.success) {
-      navigation.goBack();
+      if (result.info) {
+        Alert.alert('Emergency Sent', result.info, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        navigation.goBack();
+      }
     }
   };
 
@@ -82,7 +89,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
         {!isOnline && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineBannerText}>
-              Offline mode - Emergency will be sent when connected
+              Offline mode - Emergency will be sent via SMS
             </Text>
           </View>
         )}

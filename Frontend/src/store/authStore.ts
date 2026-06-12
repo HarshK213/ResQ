@@ -2,11 +2,15 @@ import { create } from 'zustand';
 import type { AuthState, AppRegisterRequest, AppRegisterVerifyRequest, UserResponse } from '../types/auth';
 import authRepository from '../repositories/AuthRepository';
 import profileRepository from '../repositories/ProfileRepository';
+import smsRepository from '../repositories/SmsRepository';
+import connectivityService from '../services/connectivity/ConnectivityService';
+import storageService from '../services/storage/StorageService';
+import apiClient from '../services/api/ApiClient';
 import { wsService } from '../services/websocket';
 
 interface AuthStore extends AuthState {
   setRegistrationData: (data: AppRegisterRequest) => void;
-  registerApp: (data: AppRegisterRequest) => Promise<{ success: boolean; error?: string }>;
+  registerApp: (data: AppRegisterRequest) => Promise<{ success: boolean; error?: string; info?: string }>;
   verifyAppRegistration: (data: AppRegisterVerifyRequest) => Promise<{ success: boolean; error?: string }>;
   sendOtp: (phone: string) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (phone: string, otp: string) => Promise<{ success: boolean; error?: string }>;
@@ -35,16 +39,31 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   registerApp: async (data) => {
     set({ isLoading: true });
     try {
-      const result = await authRepository.registerApp(data);
-      if (result.success) {
+      const isOnline = await connectivityService.isOnline();
+
+      if (isOnline) {
+        const result = await authRepository.registerApp(data);
+        if (result.success) {
+          set({
+            registrationData: data,
+            isLoading: false,
+          });
+          return { success: true };
+        }
+        set({ isLoading: false });
+        return { success: false, error: result.error || 'Registration failed' };
+      }
+
+      const smsSent = await smsRepository.sendRegistration(data);
+      if (smsSent) {
         set({
           registrationData: data,
           isLoading: false,
         });
-        return { success: true };
+        return { success: true, info: 'Registration sent via SMS. Check your messages for confirmation.' };
       }
       set({ isLoading: false });
-      return { success: false, error: result.error || 'Registration failed' };
+      return { success: false, error: 'Failed to send registration via SMS. Please try again.' };
     } catch (error) {
       set({ isLoading: false });
       return {
@@ -148,6 +167,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   logout: async () => {
     wsService.disconnect();
     await authRepository.logout();
+    await storageService.clearAll();
     set(initialState);
   },
 
@@ -156,12 +176,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   checkAuth: async () => {
-    await authRepository.logout();
-    const localProfile = await profileRepository.getLocalProfile();
-    if (localProfile) {
+    await apiClient.loadTokens();
+    const tokens = apiClient.getAccessToken();
+    if (tokens) {
+      const localProfile = await profileRepository.getLocalProfile();
       set({
         isAuthenticated: true,
         user: localProfile,
+        tokens: { access_token: tokens, token_type: 'bearer' },
       });
     }
   },

@@ -7,6 +7,7 @@ import type {
 } from '../types/emergency';
 import type { SyncStatus } from '../types/common';
 import emergencyRepository from '../repositories/EmergencyRepository';
+import smsRepository from '../repositories/SmsRepository';
 import storageService from '../services/storage/StorageService';
 import syncManager from '../services/sync/SyncManager';
 import connectivityService from '../services/connectivity/ConnectivityService';
@@ -23,7 +24,7 @@ interface EmergencyStore {
   fetchEmergencies: () => Promise<void>;
   fetchMyEmergencies: () => Promise<void>;
   fetchEmergencyById: (id: string) => Promise<void>;
-  createEmergency: (data: CreateEmergencyPayload) => Promise<{ success: boolean; error?: string }>;
+  createEmergency: (data: CreateEmergencyPayload) => Promise<{ success: boolean; error?: string; info?: string }>;
   acceptEmergency: (id: string) => Promise<{ success: boolean; error?: string }>;
   updateEmergencyStatus: (id: string, status: string) => Promise<{ success: boolean; error?: string }>;
   cancelEmergency: (id: string) => Promise<void>;
@@ -140,18 +141,30 @@ export const useEmergencyStore = create<EmergencyStore>((set, get) => ({
         set({ isSubmitting: false });
         return { success: false, error: result.error || 'Failed to create emergency' };
       } else {
-        await syncManager.addPendingRequest({
-          id: `emergency_${Date.now()}`,
-          type: 'emergency',
-          payload: data as unknown as Record<string, unknown>,
-          createdAt: new Date().toISOString(),
-          retryCount: 0,
-        });
+        const smsSent = await smsRepository.sendEmergency(data);
+        if (smsSent) {
+          await storageService.addEmergency({
+            _id: `emergency_${Date.now()}`,
+            requester_id: null,
+            requester_phone: '',
+            source: 'sms',
+            resource: data.resource,
+            blood_group: data.blood_group || null,
+            urgency: data.urgency,
+            location_name: data.location_name,
+            location: { type: 'Point', coordinates: [data.longitude, data.latitude] },
+            raw_message: null,
+            status: 'open',
+            assigned_volunteer: null,
+            current_radius_km: 5.0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          set({ isSubmitting: false });
+          return { success: true, info: 'Emergency request sent via SMS.' };
+        }
         set({ isSubmitting: false });
-        return {
-          success: true,
-          error: 'Emergency saved offline. Will be sent when connection is restored.',
-        };
+        return { success: false, error: 'Failed to send emergency via SMS.' };
       }
     } catch (error) {
       set({ isSubmitting: false });
