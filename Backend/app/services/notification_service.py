@@ -63,17 +63,6 @@ class NotificationService:
 
             notification_id = await self.notification_repo.create(notification_data)
 
-            try:
-                await sms_service.send_volunteer_notification(
-                    phone=volunteer_phone,
-                    resource=resource,
-                    urgency=urgency,
-                    distance_km=distance_km,
-                    location=location_name or "your area",
-                )
-            except Exception as e:
-                logger.warning(f"Failed to send SMS notification to {volunteer_phone}: {e}")
-
             await self.create_app_notification(
                 user_phone=volunteer_phone,
                 notification_type=AppNotificationType.NEW_REQUEST,
@@ -87,6 +76,17 @@ class NotificationService:
                     "distance_km": round(distance_km, 1),
                 },
             )
+
+            try:
+                await sms_service.send_volunteer_notification(
+                    phone=volunteer_phone,
+                    resource=resource,
+                    urgency=urgency,
+                    distance_km=distance_km,
+                    location=location_name or "your area",
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send SMS notification to {volunteer_phone}: {e}")
 
             notifications.append({
                 "id": notification_id,

@@ -72,7 +72,9 @@ async def process_matching(request_id: str, coordinates: list, resource: str, bl
             request_coordinates=coordinates,
         )
         req_repo = RequestRepo()
-        await req_repo.update_status(request_id, RequestStatus.MATCHED)
+        req = await req_repo.get_by_id(request_id)
+        if req and req["status"] == RequestStatus.OPEN.value:
+            await req_repo.update_status(request_id, RequestStatus.MATCHED)
 
 
 @router.post("/", response_model=RequestResponse)

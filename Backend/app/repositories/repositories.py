@@ -56,6 +56,7 @@ class UserRepo:
         resource: ResourceType,
         radius_meters: float,
         blood_group: Optional[BloodGroup] = None,
+        exclude_phone: Optional[str] = None,
     ) -> List[dict]:
         query = {
             "location": {
@@ -70,6 +71,8 @@ class UserRepo:
             "resources": {"$in": [resource.value]},
             "is_volunteer": True,
         }
+        if exclude_phone:
+            query["phone"] = {"$ne": exclude_phone}
         if blood_group and resource == ResourceType.BLOOD:
             query["blood_group"] = blood_group.value
 
