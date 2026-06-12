@@ -15,9 +15,30 @@ const API_PREFIX = '/api/v1';
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
+  private logEnabled = true;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  setLogging(enabled: boolean) {
+    this.logEnabled = enabled;
+  }
+
+  private logRequest(method: string, url: string, body?: unknown) {
+    if (!this.logEnabled) return;
+    console.log(`\n🌐 [API] --> ${method} ${url}`);
+    if (body) {
+      console.log(`📦 [API] --> Body:`, JSON.stringify(body, null, 2));
+    }
+  }
+
+  private logResponse(method: string, url: string, status: number | string, data?: unknown) {
+    if (!this.logEnabled) return;
+    console.log(`📡 [API] <-- ${method} ${url} [${status}]`);
+    if (data) {
+      console.log(`📦 [API] <-- Response:`, JSON.stringify(data, null, 2));
+    }
   }
 
   async setTokens(tokens: { access_token: string }): Promise<void> {
@@ -56,6 +77,8 @@ class ApiClient {
 
     try {
       const url = `${this.baseUrl}${API_PREFIX}${endpoint}`;
+      this.logRequest(method, url, body);
+
       const response = await fetch(url, {
         method,
         headers: requestHeaders,
@@ -67,20 +90,24 @@ class ApiClient {
       try {
         data = JSON.parse(text);
       } catch {
+        this.logResponse(method, url, response.status, `Invalid JSON: ${text.slice(0, 100)}`);
         return { success: false, error: `Invalid JSON response: ${text.slice(0, 100)}` };
       }
 
       if (!response.ok) {
         const err = data as unknown as ApiErrorResponse;
+        this.logResponse(method, url, response.status, data);
         return {
           success: false,
           error: err.detail || (data as Record<string, unknown>)?.message as string || `HTTP ${response.status}`,
         };
       }
 
+      this.logResponse(method, url, response.status, data);
       return { success: true, data };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Network request failed';
+      this.logResponse(method, url, 'ERROR', message);
       return { success: false, error: message };
     }
   }

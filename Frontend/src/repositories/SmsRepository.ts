@@ -21,11 +21,19 @@ export class SmsRepository implements ISmsRepository {
   }
 
   async sendRegistration(data: AppRegisterRequest): Promise<boolean> {
-    return this.smsService.sendRegistration(data);
+    console.log(`\n📱 [SMS] --> Registration via SMS to ${env.smsGatewayNumber}`);
+    console.log(`📱 [SMS] --> Data:`, JSON.stringify(data, null, 2));
+    const result = await this.smsService.sendRegistration(data);
+    console.log(`📱 [SMS] <-- ${result ? 'Sent' : 'Failed'}`);
+    return result;
   }
 
   async sendEmergency(data: CreateEmergencyPayload): Promise<boolean> {
-    return this.smsService.sendEmergency(data);
+    console.log(`\n📱 [SMS] --> Emergency via SMS to ${env.smsGatewayNumber}`);
+    console.log(`📱 [SMS] --> Data:`, JSON.stringify(data, null, 2));
+    const result = await this.smsService.sendEmergency(data);
+    console.log(`📱 [SMS] <-- ${result ? 'Sent' : 'Failed'}`);
+    return result;
   }
 
   setGatewayNumber(number: string): void {

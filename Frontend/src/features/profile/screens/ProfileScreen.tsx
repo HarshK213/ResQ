@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { colors, fontSize, spacing, borderRadius, shadows } from '../../../config/theme';
 import Badge from '../../../components/Badge';
@@ -12,6 +13,8 @@ import Card from '../../../components/Card';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import { useProfile } from '../hooks/useProfile';
 import { useAuth } from '../../auth/hooks/useAuth';
+import { useEmergencyStore } from '../../../store/emergencyStore';
+import { useNotificationStore } from '../../../store/notificationStore';
 import { formatDateTime } from '../../../utils/formatters';
 
 interface ProfileScreenProps {
@@ -20,11 +23,34 @@ interface ProfileScreenProps {
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { profile, isLoading, fetchProfile } = useProfile();
-  const { logout, user } = useAuth();
+  const { logout, user, isAuthenticated } = useAuth();
+  const resetEmergencyStore = useEmergencyStore((s) => s.reset);
+  const resetNotificationStore = useNotificationStore((s) => s.reset);
 
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigation.reset({ index: 0, routes: [{ name: 'Registration' }] });
+    }
+  }, [isAuthenticated, navigation]);
+
+  const handleLogout = useCallback(async () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          resetEmergencyStore();
+          resetNotificationStore();
+          await logout();
+        },
+      },
+    ]);
+  }, [logout, resetEmergencyStore, resetNotificationStore]);
 
   const displayProfile = profile || user;
 
@@ -82,7 +108,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
         <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('MyEmergencies')}>
           <Text style={styles.actionButtonText}>🚨  My Emergencies</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={logout}>
+        <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
           <Text style={[styles.actionButtonText, styles.logoutText]}>🚪  Logout</Text>
         </TouchableOpacity>
       </View>

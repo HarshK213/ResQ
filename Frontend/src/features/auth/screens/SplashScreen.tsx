@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
 import { colors, fontSize, spacing } from '../../../config/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../../../utils/constants';
@@ -16,6 +17,8 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
     calledRef.current = true;
 
     const init = async () => {
+      await Location.requestForegroundPermissionsAsync();
+
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKENS);
       const onboardingDone = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
 

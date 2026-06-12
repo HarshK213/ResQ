@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { colors, fontSize, spacing, borderRadius } from '../../../config/theme';
 import Input from '../../../components/Input';
@@ -14,6 +15,8 @@ import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
 import { BLOOD_GROUPS } from '../../../utils/constants';
 import { useAuth } from '../hooks/useAuth';
+import { useConnectivity } from '../../../hooks/useConnectivity';
+import { useLocation } from '../../../hooks/useLocation';
 import type { AppRegisterRequest } from '../../../types/auth';
 
 const RESOURCES = ['blood', 'transport', 'medicines', 'food', 'shelter'] as const;
@@ -24,6 +27,8 @@ interface RegistrationScreenProps {
 
 const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) => {
   const { registerApp, isLoading, setRegistrationData } = useAuth();
+  const { isOnline } = useConnectivity();
+  const { coordinates, error: locError, getLocation, isLoading: locLoading } = useLocation();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -32,6 +37,10 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) =
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getLocation();
+  }, [getLocation]);
 
   const toggleResource = (r: string) => {
     setSelectedResources((prev) =>
@@ -57,18 +66,34 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) =
   const handleSubmit = async () => {
     if (!validate()) return;
 
+    if (!coordinates) {
+      const coords = await getLocation();
+      if (!coords) {
+        setErrors({ submit: 'Unable to get your location. Please enable GPS and try again.' });
+        return;
+      }
+    }
+
     const data: AppRegisterRequest = {
       phone: phone.trim(),
       name: name.trim(),
       resources: selectedResources,
       blood_group: bloodGroup,
       location_name: locationName.trim(),
+      latitude: coordinates!.latitude,
+      longitude: coordinates!.longitude,
     };
 
     setRegistrationData(data);
     const result = await registerApp(data);
     if (result.success) {
-      navigation.navigate('OtpVerification', { phone: data.phone });
+      if (result.info) {
+        Alert.alert('Registration Submitted', result.info, [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        navigation.navigate('OtpVerification', { phone: data.phone });
+      }
     } else {
       setErrors({ submit: result.error || 'Registration failed' });
     }
@@ -159,6 +184,20 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) =
             required
           />
 
+          <View style={styles.locationBox}>
+            <Text style={styles.locationLabel}>
+              {locLoading ? 'Getting your location...' : coordinates ? 'GPS location captured' : locError || 'Unable to get GPS location'}
+            </Text>
+            {coordinates && (
+              <Text style={styles.locationCoords}>
+                {coordinates.latitude.toFixed(4)}, {coordinates.longitude.toFixed(4)}
+              </Text>
+            )}
+            {!coordinates && !locLoading && (
+              <Button title="Retry Location" onPress={getLocation} variant="ghost" size="sm" />
+            )}
+          </View>
+
           {errors.submit && (
             <Text style={styles.errorText}>{errors.submit}</Text>
           )}
@@ -192,6 +231,9 @@ const styles = StyleSheet.create({
   option: { marginBottom: spacing.xs },
   errorText: { fontSize: fontSize.sm, color: colors.error, marginTop: spacing.xs },
   submitButton: { marginTop: spacing.lg },
+  locationBox: { backgroundColor: colors.surface, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  locationLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  locationCoords: { fontSize: fontSize.sm, color: colors.textSecondary, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 });
 
 export default RegistrationScreen;
