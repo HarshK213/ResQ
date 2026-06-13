@@ -1,10 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from bson.errors import InvalidId
+from bson import ObjectId
 from app.api.deps import get_current_user
 from app.repositories.repositories import NotificationRepo, AppNotificationRepo
 from app.schemas.schemas import NotificationResponse, AppNotificationResponse, UnreadCountResponse
 
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+
+def validate_object_id(oid: str):
+    try:
+        ObjectId(oid)
+    except (InvalidId, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 @router.get("/", response_model=list[AppNotificationResponse])
@@ -45,6 +54,7 @@ async def mark_notification_read(
     notification_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    validate_object_id(notification_id)
     repo = AppNotificationRepo()
     notification = await repo.get_by_id(notification_id)
     if not notification:

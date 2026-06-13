@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from bson.errors import InvalidId
+from bson import ObjectId
 from app.api.deps import get_current_user
 from app.schemas.schemas import DistanceResponse, LocationUpdate, LocationSchema
 from app.services.distance import distance_service
@@ -7,6 +9,13 @@ from app.models.models import RequestStatus
 
 
 router = APIRouter(prefix="/tracking", tags=["Distance Tracking"])
+
+
+def validate_object_id(oid: str):
+    try:
+        ObjectId(oid)
+    except (InvalidId, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 @router.post("/location", response_model=dict)
@@ -27,6 +36,7 @@ async def get_distance(
     request_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    validate_object_id(request_id)
     req_repo = RequestRepo()
     req = await req_repo.get_by_id(request_id)
     if not req:

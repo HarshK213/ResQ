@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from app.repositories.repositories import NotificationRepo, AppNotificationRepo
 from app.services.sms_service import sms_service
@@ -32,6 +33,21 @@ class NotificationService:
             "read": False,
         })
 
+    async def _send_volunteer_sms(self, volunteer_phone: str, resource: str, urgency: str, distance_km: float, location_name: str, request_id: str):
+        try:
+            result = await sms_service.send_volunteer_notification(
+                phone=volunteer_phone,
+                resource=resource,
+                urgency=urgency,
+                distance_km=distance_km,
+                location=location_name,
+                request_id=request_id,
+            )
+            status = result.get("status", "unknown") if result else "none"
+            logger.info(f"[NOTIF] SMS to {volunteer_phone} for request {request_id}: {status}")
+        except Exception as e:
+            logger.warning(f"[NOTIF] SMS to {volunteer_phone} failed: {e}")
+
     async def notify_volunteers(
         self,
         request_id: str,
@@ -40,10 +56,18 @@ class NotificationService:
         urgency: str,
         location_name: str,
         request_coordinates: list = None,
+        requester_phone: str = None,
     ) -> list:
         notifications = []
+        sms_tasks = []
+
         for volunteer in volunteers:
             volunteer_phone = volunteer["phone"]
+
+            if requester_phone and volunteer_phone == requester_phone:
+                logger.info(f"[NOTIF] Skipping requester {requester_phone} from volunteer notifications")
+                continue
+
             distance_km = 0.0
 
             if request_coordinates and volunteer.get("location") and volunteer["location"].get("coordinates"):
@@ -77,22 +101,21 @@ class NotificationService:
                 },
             )
 
-            try:
-                await sms_service.send_volunteer_notification(
-                    phone=volunteer_phone,
-                    resource=resource,
-                    urgency=urgency,
-                    distance_km=distance_km,
-                    location=location_name or "your area",
-                )
-            except Exception as e:
-                logger.warning(f"Failed to send SMS notification to {volunteer_phone}: {e}")
+            sms_tasks.append(self._send_volunteer_sms(
+                volunteer_phone, resource, urgency, distance_km, location_name or "your area", request_id
+            ))
 
             notifications.append({
                 "id": notification_id,
                 "volunteer_phone": volunteer_phone,
                 "distance_km": round(distance_km, 1),
             })
+
+        if sms_tasks:
+            results = await asyncio.gather(*sms_tasks, return_exceptions=True)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.warning(f"[NOTIF] SMS task {i} failed: {result}")
 
         return notifications
 

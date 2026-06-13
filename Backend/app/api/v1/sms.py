@@ -2,6 +2,8 @@ import logging
 import hmac as hmac_module
 import hashlib
 from typing import Optional
+from bson.errors import InvalidId
+from bson import ObjectId
 from fastapi import APIRouter, Depends, BackgroundTasks, Request, HTTPException, status, Query
 from app.schemas.schemas import SMSWebhookPayload, SMSIncomingMessage
 from app.models.models import (
@@ -69,14 +71,39 @@ def verify_webhook_signature(request_body: bytes, timestamp: str, signature: str
     return hmac_module.compare_digest(expected, signature)
 
 
+async def resolve_request_id(request_id: str, phone: str = None) -> Optional[dict]:
+    """Resolve a request ID that may be a full ObjectId or a short suffix.
+    If phone is provided and the ID is short, searches the user's own requests first,
+    then falls back to all requests."""
+    req_repo = RequestRepo()
+    try:
+        ObjectId(request_id)
+        return await req_repo.get_by_id(request_id)
+    except (InvalidId, ValueError):
+        if phone:
+            own_requests = await req_repo.list_open_by_phone(phone)
+            for r in own_requests:
+                if str(r["_id"]).endswith(request_id):
+                    return r
+        all_open = await req_repo.collection.find(
+            {"status": {"$in": ["open", "matched", "assigned"]}}
+        ).to_list(length=100)
+        for r in all_open:
+            if str(r["_id"]).endswith(request_id):
+                return r
+        return None
+
+
 async def handle_sms_accept(phone: str, request_id: str):
     req_repo = RequestRepo()
     user_repo = UserRepo()
 
-    request = await req_repo.get_by_id(request_id)
+    request = await resolve_request_id(request_id, phone=phone)
     if not request:
-        await sms_service.send_sms(phone, "Request not found. It may have been cancelled.")
+        await sms_service.send_sms(phone, "Request not found. Reply YES <request_id> to accept.")
         return
+
+    resolved_id = str(request["_id"])
 
     if request["status"] not in (RequestStatus.OPEN.value, RequestStatus.MATCHED.value):
         await sms_service.send_sms(
@@ -99,12 +126,12 @@ async def handle_sms_accept(phone: str, request_id: str):
     volunteer_id = str(volunteer["_id"])
 
     await req_repo.update_status(
-        request_id=request_id,
+        request_id=resolved_id,
         status=RequestStatus.ASSIGNED,
         assigned_volunteer=volunteer_id,
     )
 
-    await notification_service.mark_accepted(request_id, volunteer_id)
+    await notification_service.mark_accepted(resolved_id, volunteer_id)
 
     distance_km = None
     if request.get("location") and volunteer.get("location"):
@@ -134,18 +161,17 @@ async def handle_sms_accept(phone: str, request_id: str):
         notification_type=AppNotificationType.VOLUNTEER_FOUND,
         title="Volunteer found!",
         message=f"{volunteer.get('name', 'Volunteer')} ({phone}) is {distance_km:.1f} km away and has been assigned to your request.",
-        request_id=request_id,
+        request_id=resolved_id,
         data={"volunteer_phone": phone, "distance_km": round(distance_km, 1) if distance_km else None},
     )
 
-    logger.info(f"Volunteer {phone} accepted request {request_id}")
+    logger.info(f"Volunteer {phone} accepted request {resolved_id}")
 
 
 async def handle_sms_decline(phone: str, request_id: str):
-    req_repo = RequestRepo()
-    request = await req_repo.get_by_id(request_id)
+    request = await resolve_request_id(request_id, phone=phone)
     if not request:
-        await sms_service.send_sms(phone, "Request not found.")
+        await sms_service.send_sms(phone, "Request not found. Reply NO <request_id> to decline.")
         return
 
     await sms_service.send_sms(
@@ -154,6 +180,68 @@ async def handle_sms_decline(phone: str, request_id: str):
     )
 
     logger.info(f"Volunteer {phone} declined request {request_id}")
+
+
+async def handle_sms_cancel(phone: str, request_id: Optional[str] = None):
+    req_repo = RequestRepo()
+
+    if not request_id:
+        open_requests = await req_repo.list_open_by_phone(phone)
+        if not open_requests:
+            await sms_service.send_sms(phone, "You have no active requests to cancel.")
+            return
+        if len(open_requests) == 1:
+            request_id = str(open_requests[0]["_id"])
+        else:
+            lines = []
+            for r in open_requests[:5]:
+                rid = str(r["_id"])
+                short = rid[-8:]
+                res = r.get("resource", "?")
+                loc = r.get("location_name", "unknown")
+                lines.append(f"  {short} - {res} near {loc}")
+            ids = "\n".join(lines)
+            await sms_service.send_sms(phone, f"You have {len(open_requests)} active request(s). Reply CANCEL <id>:\n{ids}")
+            return
+
+    request = await resolve_request_id(request_id, phone=phone)
+    if not request:
+        await sms_service.send_sms(phone, "Request not found. Reply CANCEL to cancel your latest request.")
+        return
+
+    request_id = str(request["_id"])
+
+    if request["requester_phone"] != phone:
+        await sms_service.send_sms(phone, "You can only cancel your own requests.")
+        return
+
+    if request["status"] in (RequestStatus.COMPLETED.value, RequestStatus.CANCELLED.value):
+        await sms_service.send_sms(phone, f"This request is already {request['status']}.")
+        return
+
+    await req_repo.update_status(request_id, RequestStatus.CANCELLED)
+
+    resource_label = request.get("resource", "resource")
+    location = request.get("location_name", "your area")
+    await sms_service.send_sms(phone, f"Your request for {resource_label} near {location} has been cancelled.")
+
+    assigned_volunteer_id = request.get("assigned_volunteer")
+    if assigned_volunteer_id:
+        volunteer = await UserRepo().get_by_id(assigned_volunteer_id)
+        if volunteer and volunteer.get("phone"):
+            await sms_service.send_sms(
+                volunteer["phone"],
+                f"The request for {resource_label} near {location} has been cancelled by the requester. No action needed.",
+            )
+            await notification_service.create_app_notification(
+                user_phone=volunteer["phone"],
+                notification_type=AppNotificationType.REQUEST_CANCELLED,
+                title="Request cancelled",
+                message=f"The request for {resource_label} near {location} has been cancelled.",
+                request_id=request_id,
+            )
+
+    logger.info(f"Requester {phone} cancelled request {request_id}")
 
 
 async def process_sms_request(phone: str, message: str, location_name: Optional[str] = None):
@@ -253,6 +341,8 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
             resource=resource.value,
             urgency=urgency.value,
             location_name=location_name or "unknown",
+            request_coordinates=coordinates,
+            requester_phone=phone,
         )
         await req_repo.update_status(request_id, RequestStatus.MATCHED)
     else:
@@ -429,15 +519,24 @@ async def sms_webhook(
             await sms_service.send_sms(phone, "To decline a request, reply: NO <request_id>")
         return {"status": "processed"}
 
+    if msg_lower.startswith("cancel"):
+        parts = message.strip().split()
+        if len(parts) >= 2:
+            request_id = parts[1].strip()
+            await handle_sms_cancel(phone, request_id)
+        else:
+            await handle_sms_cancel(phone, None)
+        return {"status": "processed"}
+
     if msg_lower in ("register", "start") or msg_lower in ("hi", "hello", "hey", "help", "info", "menu"):
         await handle_sms_registration(phone, message)
-    elif any(keyword in msg_lower for keyword in ["need", "urgent", "emergency", "blood", "transport", "medicine", "food", "shelter"]) or msg_lower.startswith("req"):
-        background_tasks.add_task(process_sms_request, phone, message)
     else:
         session_repo = SMSSessionRepo()
         session = await session_repo.get_by_phone(phone)
         if session:
             await handle_sms_registration(phone, message)
+        elif any(keyword in msg_lower for keyword in ["need", "urgent", "emergency", "blood", "transport", "medicine", "food", "shelter"]) or msg_lower.startswith("req"):
+            background_tasks.add_task(process_sms_request, phone, message)
         else:
             HELP_MESSAGE = (
                 "ResQ - Emergency Response Platform\n\n"
@@ -446,13 +545,14 @@ async def sms_webhook(
                 "   Send: REGISTER\n\n"
                 "2. EMERGENCY - Request help\n"
                 "   Send: Need B- blood urgently near AIIMS\n"
-                "   Send: Need transport near MP Nagar\n"
-                "   Send: Need medicines for diabetes near Kolar Road\n\n"
+                "   Send: Need transport near MP Nagar\n\n"
                 "3. ACCEPT a request\n"
                 "   Send: YES <request_id>\n\n"
                 "4. DECLINE a request\n"
                 "   Send: NO <request_id>\n\n"
-                "5. HELP - See this message\n"
+                "5. CANCEL your request\n"
+                "   Send: CANCEL <request_id> or just CANCEL\n\n"
+                "6. HELP - See this message\n"
                 "   Send: HELP\n\n"
                 "Resources: blood, transport, medicines, food, shelter"
             )
