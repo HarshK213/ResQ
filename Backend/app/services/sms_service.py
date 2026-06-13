@@ -1,6 +1,9 @@
+import logging
 import httpx
 from typing import Optional
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class SMSService:
@@ -12,6 +15,7 @@ class SMSService:
 
     async def send_sms(self, phone: str, message: str) -> Optional[dict]:
         if not self.username or not self.password:
+            logger.info(f"[SMS] Skipped (no credentials) to {phone}")
             return {"status": "skipped", "reason": "SMS gateway not configured"}
 
         payload = {
@@ -23,7 +27,7 @@ class SMSService:
         if self.device_id:
             payload["deviceId"] = self.device_id
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/messages",
@@ -31,9 +35,15 @@ class SMSService:
                     json=payload,
                 )
                 if response.status_code in (200, 202):
+                    logger.info(f"[SMS] Sent to {phone}: status={response.status_code}")
                     return {"status": "sent", "response": response.json()}
+                logger.warning(f"[SMS] Failed to {phone}: status={response.status_code} body={response.text[:200]}")
                 return {"status": "failed", "code": response.status_code, "body": response.text}
+            except httpx.TimeoutException as e:
+                logger.warning(f"[SMS] Timeout sending to {phone}: {e}")
+                return {"status": "timeout", "reason": str(e)}
             except httpx.HTTPError as e:
+                logger.warning(f"[SMS] Error sending to {phone}: {e}")
                 return {"status": "error", "reason": str(e)}
 
     async def send_otp(self, phone: str, otp: str) -> Optional[dict]:
@@ -55,12 +65,19 @@ class SMSService:
         )
         return await self.send_sms(phone, message)
 
-    async def send_volunteer_notification(self, phone: str, resource: str, urgency: str, distance_km: float, location: str) -> Optional[dict]:
-        message = (
-            f"Emergency: {urgency} need for {resource} near {location}. "
-            f"You are {distance_km:.1f} km away. "
-            f"Reply YES to accept or NO to decline."
-        )
+    async def send_volunteer_notification(self, phone: str, resource: str, urgency: str, distance_km: float, location: str, request_id: str = None) -> Optional[dict]:
+        if request_id:
+            message = (
+                f"Emergency: {urgency} need for {resource} near {location}. "
+                f"You are {distance_km:.1f} km away. "
+                f"Reply YES {request_id} to accept or NO {request_id} to decline."
+            )
+        else:
+            message = (
+                f"Emergency: {urgency} need for {resource} near {location}. "
+                f"You are {distance_km:.1f} km away. "
+                f"Reply YES to accept or NO to decline."
+            )
         return await self.send_sms(phone, message)
 
 

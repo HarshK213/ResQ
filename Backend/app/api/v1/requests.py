@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
+from bson.errors import InvalidId
+from bson import ObjectId
 from app.api.deps import get_current_user, get_db
 from app.schemas.schemas import (
     RequestCreate,
@@ -22,6 +24,13 @@ from app.models.models import AppNotificationType
 
 
 router = APIRouter(prefix="/requests", tags=["Emergency Requests"])
+
+
+def validate_object_id(oid: str):
+    try:
+        ObjectId(oid)
+    except (InvalidId, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 def request_to_response(req: dict) -> RequestResponse:
@@ -50,7 +59,7 @@ def request_to_response(req: dict) -> RequestResponse:
     )
 
 
-async def process_matching(request_id: str, coordinates: list, resource: str, blood_group: str or None, location_name: str, urgency: str):
+async def process_matching(request_id: str, coordinates: list, resource: str, blood_group: str or None, location_name: str, urgency: str, requester_phone: str = None):
     matching_svc = MatchingService()
     resource_type = ResourceType(resource)
     bg = BloodGroup(blood_group) if blood_group else None
@@ -70,6 +79,7 @@ async def process_matching(request_id: str, coordinates: list, resource: str, bl
             urgency=urgency,
             location_name=location_name or "unknown location",
             request_coordinates=coordinates,
+            requester_phone=requester_phone,
         )
         req_repo = RequestRepo()
         req = await req_repo.get_by_id(request_id)
@@ -132,6 +142,7 @@ async def create_request(
         blood_group=request_data.blood_group.value if request_data.blood_group else None,
         location_name=request_data.location_name or "unknown",
         urgency=request_data.urgency.value,
+        requester_phone=current_user["phone"],
     )
 
     return request_to_response(created)
@@ -154,6 +165,7 @@ async def get_request(
     request_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    validate_object_id(request_id)
     req_repo = RequestRepo()
     req = await req_repo.get_by_id(request_id)
     if not req:
@@ -166,6 +178,7 @@ async def accept_request(
     request_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    validate_object_id(request_id)
     req_repo = RequestRepo()
 
     req = await req_repo.get_by_id(request_id)
@@ -247,6 +260,7 @@ async def update_request_status(
     status_query: str = Query(..., alias="status"),
     current_user: dict = Depends(get_current_user),
 ):
+    validate_object_id(request_id)
     try:
         new_status = RequestStatus(status_query)
     except ValueError:
@@ -281,5 +295,21 @@ async def update_request_status(
             message=f"Your request for {req['resource']} has been cancelled.",
             request_id=request_id,
         )
+
+        assigned_volunteer_id = req.get("assigned_volunteer")
+        if assigned_volunteer_id:
+            volunteer = await UserRepo().get_by_id(assigned_volunteer_id)
+            if volunteer:
+                await sms_service.send_sms(
+                    volunteer["phone"],
+                    f"The request for {req.get('resource', 'resources')} near {req.get('location_name', 'your area')} has been cancelled by the requester. No action needed.",
+                )
+                await notification_service.create_app_notification(
+                    user_phone=volunteer["phone"],
+                    notification_type=AppNotificationType.REQUEST_CANCELLED,
+                    title="Request cancelled",
+                    message=f"The request for {req.get('resource', 'resources')} near {req.get('location_name', 'your area')} has been cancelled.",
+                    request_id=request_id,
+                )
 
     return request_to_response(updated)

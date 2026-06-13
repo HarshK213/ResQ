@@ -64,6 +64,14 @@ async def verify_otp(request: OTPVerifyRequest):
         )
     token, user_data = result
     user_repo = UserRepo()
+
+    if request.latitude is not None and request.longitude is not None:
+        location = {
+            "type": "Point",
+            "coordinates": [request.longitude, request.latitude],
+        }
+        await user_repo.update_location(request.phone, location)
+
     user = await user_repo.get_by_phone(request.phone)
     return TokenResponse(
         access_token=token,
@@ -78,29 +86,10 @@ async def register_app(data: AppRegisterRequest):
     existing = await user_repo.get_by_phone(data.phone)
 
     if existing:
-        auth_service = AuthService()
-        result = await auth_service.send_otp(data.phone)
-        await sms_service.send_otp(data.phone, result["otp"])
-
-        pending_data = {}
-        if data.name:
-            pending_data["name"] = data.name
-        if data.resources:
-            pending_data["resources"] = [r.value for r in data.resources]
-        if data.blood_group:
-            pending_data["blood_group"] = data.blood_group.value
-        if data.location_name:
-            pending_data["location_name"] = data.location_name
-        if data.latitude and data.longitude:
-            pending_data["latitude"] = data.latitude
-            pending_data["longitude"] = data.longitude
-        await user_repo.update(str(existing["_id"]), {"registration_pending": pending_data})
-
-        return {
-            "message": "OTP sent to your phone. Verify to complete registration.",
-            "phone": data.phone,
-            "requires_verification": True,
-        }
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This phone number is already registered. Please login instead.",
+        )
 
     coordinates = None
     if data.latitude and data.longitude:
@@ -142,6 +131,7 @@ async def register_app(data: AppRegisterRequest):
         "message": "OTP sent to your phone. Verify to complete registration.",
         "phone": data.phone,
         "requires_verification": True,
+        "is_existing_user": False,
     }
 
 
@@ -164,8 +154,18 @@ async def register_app_verify(data: AppRegisterVerifyRequest):
             detail="User not found",
         )
 
-    pending = user.pop("registration_pending", None)
-    update_data = {"registration_source": RegistrationSource.APP.value}
+    pending = user.get("registration_pending")
+    update_data = {}
+    unset_data = {}
+
+    has_new_data = any([
+        data.name, data.resources, data.blood_group,
+        data.location_name, data.latitude, data.longitude,
+    ])
+    has_pending_data = pending and any([
+        pending.get("name"), pending.get("resources"),
+        pending.get("blood_group"), pending.get("location_name"),
+    ])
 
     if data.name:
         update_data["name"] = data.name
@@ -199,11 +199,23 @@ async def register_app_verify(data: AppRegisterVerifyRequest):
 
     if coordinates:
         update_data["location"] = {"type": "Point", "coordinates": coordinates}
+        if data.location_name:
+            update_data["location_name"] = data.location_name
+        elif pending and pending.get("location_name"):
+            update_data["location_name"] = pending["location_name"]
 
-    update_data.pop("registration_pending", None)
+    if not has_new_data and not has_pending_data:
+        update_data["registration_source"] = RegistrationSource.APP.value
+
+    unset_data["registration_pending"] = ""
+
+    update_ops = {"$set": update_data}
+    if unset_data:
+        update_ops["$unset"] = unset_data
+
     await user_repo.collection.update_one(
         {"_id": user["_id"]},
-        {"$unset": {"registration_pending": ""}, "$set": update_data},
+        update_ops,
     )
 
     user = await user_repo.get_by_phone(data.phone)

@@ -95,7 +95,10 @@ class RequestRepo:
         return str(result.inserted_id)
 
     async def get_by_id(self, request_id: str) -> Optional[dict]:
-        return await self.collection.find_one({"_id": ObjectId(request_id)})
+        try:
+            return await self.collection.find_one({"_id": ObjectId(request_id)})
+        except Exception:
+            return None
 
     async def update(self, request_id: str, update_data: dict) -> Optional[dict]:
         update_data["updated_at"] = datetime.now(timezone.utc)
@@ -114,7 +117,7 @@ class RequestRepo:
 
     async def list_open_by_phone(self, phone: str) -> List[dict]:
         cursor = self.collection.find(
-            {"requester_phone": phone, "status": {"$in": ["open", "matched"]}},
+            {"requester_phone": phone, "status": {"$in": ["open", "matched", "assigned"]}},
         ).sort("created_at", -1)
         return await cursor.to_list(length=50)
 
@@ -223,7 +226,10 @@ class AppNotificationRepo:
         return str(result.inserted_id)
 
     async def get_by_id(self, notification_id: str) -> Optional[dict]:
-        return await self.collection.find_one({"_id": ObjectId(notification_id)})
+        try:
+            return await self.collection.find_one({"_id": ObjectId(notification_id)})
+        except Exception:
+            return None
 
     async def list_by_phone(self, phone: str, limit: int = 50, skip: int = 0) -> List[dict]:
         cursor = self.collection.find({"user_phone": phone}).sort("created_at", -1).skip(skip).limit(limit)

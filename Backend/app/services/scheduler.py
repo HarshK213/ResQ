@@ -106,6 +106,7 @@ class RadiusExpansionScheduler:
             urgency=urgency,
             location_name=location_name,
             request_coordinates=request_coordinates,
+            requester_phone=req.get("requester_phone"),
         )
 
         request_repo = RequestRepo()
