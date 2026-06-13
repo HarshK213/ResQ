@@ -56,6 +56,7 @@ def request_to_response(req: dict) -> RequestResponse:
         status=req.get("status", "open"),
         assigned_volunteer=req.get("assigned_volunteer"),
         current_radius_km=req.get("current_radius_km", 5.0),
+        advisory=req.get("advisory"),
         created_at=req["created_at"],
         updated_at=req["updated_at"],
     )
@@ -137,12 +138,17 @@ async def create_request(
     }
 
     request_id = await req_repo.create(request_dict)
-    created = await req_repo.get_by_id(request_id)
 
     ai_parser = AIParserService()
     advisory = await ai_parser.generate_instructions(
         request_data.resource.value, request_data.raw_message or ""
     )
+
+    if advisory:
+        await req_repo.update(request_id, {"advisory": advisory})
+        created = await req_repo.get_by_id(request_id)
+    else:
+        created = await req_repo.get_by_id(request_id)
 
     background_tasks.add_task(
         process_matching,
