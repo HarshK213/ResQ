@@ -17,6 +17,7 @@ export interface EmergencyRequest {
     coordinates: [number, number];
   } | null;
   raw_message: string | null;
+  advisory?: string | null;
   status: EmergencyStatus;
   assigned_volunteer: string | null;
   current_radius_km: number;

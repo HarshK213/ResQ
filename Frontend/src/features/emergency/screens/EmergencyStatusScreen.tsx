@@ -66,18 +66,6 @@ function getEmergencyNumbers(resource: string): { label: string; number: string 
   return numbers;
 }
 
-function getSafetyInstructions(resource: string): string[] {
-  const common = ['Stay calm and assess the situation.', 'Move to a safe location if possible.'];
-  const specific: Record<string, string[]> = {
-    medical: ['Do not move the injured person unless in immediate danger.', 'Apply pressure to any bleeding wounds.', 'Keep the person warm and comfortable.'],
-    rescue: ['Lock doors and stay inside if safe.', 'Keep emergency numbers ready.', 'Follow instructions from authorities.'],
-    supplies: ['Secure your current location.', 'Inventory available resources.', 'Wait for further instructions.'],
-    transport: ['Pull over to a safe location if driving.', 'Turn on hazard lights.', 'Stay visible to responders.'],
-    other: ['Follow instructions from emergency responders.', 'Help others if safe to do so.'],
-  };
-  return [...common, ...(specific[resource] || specific.other)];
-}
-
 interface EmergencyStatusScreenProps {
   navigation: any;
   route: any;
@@ -183,8 +171,6 @@ const EmergencyStatusScreen: React.FC<EmergencyStatusScreenProps> = ({ navigatio
   const isWaiting = currentStep === 'searching' || currentStep === 'notified' || currentStep === 'request_raised';
   const isResolved = currentStep === 'resolved';
   const emergencyNumbers = getEmergencyNumbers(emergencyData.resource);
-  const safetyTips = getSafetyInstructions(emergencyData.resource);
-
   const timelineIndex = TIMELINE_STEPS.findIndex((s) => s.key === currentStep);
 
   const volunteerDistance = userLocation && emergencyLatLng
@@ -362,15 +348,10 @@ const EmergencyStatusScreen: React.FC<EmergencyStatusScreenProps> = ({ navigatio
         </View>
       )}
 
-      {!isResolved && (
+      {!isResolved && emergencyData.advisory && (
         <View style={styles.safetyCard}>
-          <Text style={styles.sectionTitle}>Safety Instructions</Text>
-          {safetyTips.map((tip, idx) => (
-            <View key={idx} style={styles.safetyTip}>
-              <Text style={styles.safetyBullet}>•</Text>
-              <Text style={styles.safetyText}>{tip}</Text>
-            </View>
-          ))}
+          <Text style={styles.sectionTitle}>Advisory</Text>
+          <Text style={styles.advisoryText}>{emergencyData.advisory}</Text>
         </View>
       )}
 
@@ -531,9 +512,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.md,
   },
-  safetyTip: { flexDirection: 'row', marginBottom: spacing.sm },
-  safetyBullet: { fontSize: fontSize.md, color: colors.textSecondary, marginRight: spacing.sm, width: 10 },
   safetyText: { fontSize: fontSize.sm, color: colors.textSecondary, flex: 1, lineHeight: 18 },
+  advisoryText: { fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 20 },
 
   actionsCard: {
     backgroundColor: colors.surface,
