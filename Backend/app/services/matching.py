@@ -35,7 +35,7 @@ class MatchingService:
             coordinates=coordinates,
             resource=resource,
             radius_meters=radius_meters,
-            blood_group=blood_group if resource == ResourceType.BLOOD else None,
+            blood_group=blood_group if resource == ResourceType.MEDICAL else None,
             exclude_phone=exclude_phone,
         )
         return volunteers

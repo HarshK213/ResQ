@@ -61,8 +61,8 @@ class AppRegisterRequest(BaseModel):
     @validator("blood_group")
     def validate_blood_group(cls, v, values):
         resources = values.get("resources", [])
-        if resources and ResourceType.BLOOD in resources and v is None:
-            raise ValueError("Blood group is required when registering as blood donor")
+        if resources and ResourceType.MEDICAL in resources and v is None:
+            raise ValueError("Blood group is required when registering for medical")
         return v
 
 
@@ -103,8 +103,8 @@ class SMSRegisterRequest(BaseModel):
     @validator("blood_group")
     def validate_blood_group(cls, v, values):
         resources = values.get("resources", [])
-        if ResourceType.BLOOD in resources and v is None:
-            raise ValueError("Blood group is required when registering as blood donor")
+        if ResourceType.MEDICAL in resources and v is None:
+            raise ValueError("Blood group is required when registering for medical")
         return v
 
 
@@ -164,8 +164,8 @@ class VolunteerRegister(BaseModel):
     @validator("blood_group")
     def validate_blood_group(cls, v, values):
         resources = values.get("resources", [])
-        if ResourceType.BLOOD in resources and v is None:
-            raise ValueError("Blood group is required when registering as blood donor")
+        if ResourceType.MEDICAL in resources and v is None:
+            raise ValueError("Blood group is required when registering for medical")
         return v
 
 

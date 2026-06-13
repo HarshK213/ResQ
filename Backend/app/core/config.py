@@ -13,8 +13,8 @@ class Settings(BaseSettings):
         "You are an emergency request parser. Extract structured data from "
         "unstructured emergency messages. Return ONLY valid JSON with NO markdown "
         "formatting or code fences. Output raw JSON only. "
-        "Fields: resource (blood|transport|medicines|food|shelter), "
-        "blood_group (A+|A-|B+|B-|AB+|AB-|O+|O-|null if not blood), "
+        "Fields: resource (medical|rescue|supplies|transport|other), "
+        "blood_group (A+|A-|B+|B-|AB+|AB-|O+|O-|null if not medical), "
         "location_name (extracted place name or locality, e.g. 'Anna Nagar, Chennai'), "
         "urgency (high|low). Classify as 'high' if the message suggests life-threatening, "
         "time-critical, or serious emergency. Classify as 'low' if the need is non-urgent, "
@@ -23,11 +23,11 @@ class Settings(BaseSettings):
     )
 
     AI_INSTRUCTION_PROMPT: str = (
-        "You are an emergency first-aid advisor. Given the emergency type and details below, "
-        "provide 2-3 short, practical instructions on what the person should do RIGHT NOW "
-        "to stay safe and handle the situation while waiting for help. "
-        "Keep it brief, clear, and actionable. No more than 3 sentences total. "
-        "Return ONLY plain text, no formatting, no bullets, no numbers."
+        "You are an emergency first-aid responder giving instructions to someone at the scene of an emergency. "
+        "The person messaged for help and you must tell them exactly what to do RIGHT NOW with the person in need, "
+        "on the spot, before help arrives. Be specific to the emergency type - e.g., for a heart attack, say 'Have them "
+        "chew an aspirin, keep them still and calm, loosen tight clothing, call local emergency 108' NOT generic advice. "
+        "2-3 short, specific, actionable sentences. Return ONLY plain text, no formatting."
     )
 
     SMS_GATE_BASE_URL: str = "https://api.sms-gate.app/3rdparty/v1"

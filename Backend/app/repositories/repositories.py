@@ -80,7 +80,7 @@ class UserRepo:
         }
         if exclude_phone:
             query["phone"] = {"$ne": exclude_phone}
-        if blood_group and resource == ResourceType.BLOOD:
+        if blood_group and resource == ResourceType.MEDICAL:
             query["blood_group"] = blood_group.value
 
         cursor = self.collection.find(query)

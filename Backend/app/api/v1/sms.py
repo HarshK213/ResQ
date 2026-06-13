@@ -29,12 +29,19 @@ router = APIRouter(prefix="/sms", tags=["SMS"])
 
 
 RESOURCE_KEYWORDS = {
-    "blood": ResourceType.BLOOD,
+    "medical": ResourceType.MEDICAL,
+    "blood": ResourceType.MEDICAL,
+    "medicine": ResourceType.MEDICAL,
+    "medicines": ResourceType.MEDICAL,
+    "rescue": ResourceType.RESCUE,
+    "rescue": ResourceType.RESCUE,
+    "supplies": ResourceType.SUPPLIES,
+    "supply": ResourceType.SUPPLIES,
+    "food": ResourceType.SUPPLIES,
+    "water": ResourceType.SUPPLIES,
     "transport": ResourceType.TRANSPORT,
-    "medicines": ResourceType.MEDICINES,
-    "medicine": ResourceType.MEDICINES,
-    "food": ResourceType.FOOD,
-    "shelter": ResourceType.SHELTER,
+    "ambulance": ResourceType.TRANSPORT,
+    "other": ResourceType.OTHER,
 }
 
 BLOOD_GROUP_KEYWORDS = {
@@ -130,10 +137,9 @@ async def handle_sms_accept(phone: str, request_id: str):
         return
 
     resource_types = volunteer.get("resources", [])
-    if request["resource"] not in resource_types:
-        if request["resource"] == "blood" and "blood" not in resource_types:
-            await sms_service.send_sms(phone, "You are not registered for this resource type.")
-            return
+    if request["resource"] not in resource_types and request["resource"] != "other":
+        await sms_service.send_sms(phone, "You are not registered for this resource type.")
+        return
 
     volunteer_id = str(volunteer["_id"])
 
@@ -285,7 +291,7 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
                 resource = res_type
                 break
 
-    if not blood_group and resource == ResourceType.BLOOD:
+    if not blood_group and resource == ResourceType.MEDICAL:
         msg_lower = message.lower()
         for keyword, bg in BLOOD_GROUP_KEYWORDS.items():
             if keyword in msg_lower:
@@ -293,7 +299,7 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
                 break
 
     if not resource:
-        await sms_service.send_sms(phone, "Could not understand the resource type. Please specify: blood, transport, medicines, food, or shelter.")
+        await sms_service.send_sms(phone, "Could not understand the resource type. Please specify: medical, rescue, supplies, transport, or other.")
         return None
 
     coordinates = None
@@ -305,7 +311,7 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
 
     if not coordinates:
         loc_display = location_name or "your message"
-        await sms_service.send_sms(phone, f"Could not determine location from '{loc_display}'. Please include your location, e.g., 'Need blood urgently near AIIMS Delhi'")
+        await sms_service.send_sms(phone, f"Could not determine location from '{loc_display}'. Please include your location, e.g., 'Need medical help near AIIMS Delhi'")
         return None
 
     req_repo = RequestRepo()
@@ -405,8 +411,8 @@ async def handle_sms_registration(phone: str, message: str):
         await sms_service.send_sms(
             phone,
             f"Hi {name}! What can you help with? Reply with resource types:\n"
-            "1. BLOOD\n2. TRANSPORT\n3. MEDICINES\n4. FOOD\n5. SHELTER\n"
-            "You can combine: e.g., 'blood, transport'"
+            "1. MEDICAL\n2. RESCUE\n3. SUPPLIES\n4. TRANSPORT\n5. OTHER\n"
+            "You can combine: e.g., 'medical, transport'"
         )
         return
 
@@ -418,12 +424,12 @@ async def handle_sms_registration(phone: str, message: str):
                 resources.append(res_type.value)
 
         if not resources:
-            await sms_service.send_sms(phone, "Please specify at least one resource: blood, transport, medicines, food, shelter")
+            await sms_service.send_sms(phone, "Please specify at least one resource: medical, rescue, supplies, transport, other")
             return
 
         data["resources"] = resources
 
-        next_step = SMSSessionStep.BLOOD_GROUP if "blood" in resources else SMSSessionStep.LOCATION
+        next_step = SMSSessionStep.BLOOD_GROUP if "medical" in resources else SMSSessionStep.LOCATION
         await session_repo.update(str(session["_id"]), {
             "step": next_step.value,
             "data": data,
@@ -552,7 +558,7 @@ async def sms_webhook(
         session = await session_repo.get_by_phone(phone)
         if session:
             await handle_sms_registration(phone, message)
-        elif any(keyword in msg_lower for keyword in ["need", "urgent", "emergency", "blood", "transport", "medicine", "food", "shelter"]) or msg_lower.startswith("req"):
+        elif any(keyword in msg_lower for keyword in ["need", "urgent", "emergency", "blood", "transport", "medical", "medicine", "rescue", "supplies", "food", "shelter"]) or msg_lower.startswith("req"):
             background_tasks.add_task(process_sms_request, phone, message)
         else:
             HELP_MESSAGE = (
@@ -561,7 +567,7 @@ async def sms_webhook(
                 "1. REGISTER - Sign up as a volunteer\n"
                 "   Send: REGISTER\n\n"
                 "2. EMERGENCY - Request help\n"
-                "   Send: Need B- blood urgently near AIIMS\n"
+                "   Send: Need medical help near AIIMS\n"
                 "   Send: Need transport near MP Nagar\n\n"
                 "3. ACCEPT a request\n"
                 "   Send: YES <request_id>\n\n"
@@ -571,7 +577,7 @@ async def sms_webhook(
                 "   Send: CANCEL <request_id> or just CANCEL\n\n"
                 "6. HELP - See this message\n"
                 "   Send: HELP\n\n"
-                "Resources: blood, transport, medicines, food, shelter"
+                "Resources: medical, rescue, supplies, transport, other"
             )
             await sms_service.send_sms(phone, HELP_MESSAGE)
 

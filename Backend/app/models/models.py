@@ -6,11 +6,11 @@ from bson import ObjectId
 
 
 class ResourceType(str, Enum):
-    BLOOD = "blood"
+    MEDICAL = "medical"
+    RESCUE = "rescue"
+    SUPPLIES = "supplies"
     TRANSPORT = "transport"
-    MEDICINES = "medicines"
-    FOOD = "food"
-    SHELTER = "shelter"
+    OTHER = "other"
 
 
 class BloodGroup(str, Enum):
