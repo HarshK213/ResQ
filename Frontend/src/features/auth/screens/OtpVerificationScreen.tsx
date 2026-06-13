@@ -114,7 +114,7 @@ const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.select({ ios: 'padding', default: undefined })}
     >
       <View style={styles.content}>
         <View style={styles.header}>

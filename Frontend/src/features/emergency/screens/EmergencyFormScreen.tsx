@@ -79,7 +79,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.select({ ios: 'padding', default: undefined })}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}

@@ -119,7 +119,7 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) =
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.select({ ios: 'padding', default: undefined })}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -299,6 +299,13 @@ const RegistrationScreen: React.FC<RegistrationScreenProps> = ({ navigation }) =
             loading={isLoading}
             style={styles.submitButton}
           />
+
+          <View style={styles.loginRedirect}>
+            <Text style={styles.loginRedirectText}>Already a member? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginRedirectLink}>Login</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -319,6 +326,9 @@ const styles = StyleSheet.create({
   option: { marginBottom: spacing.xs },
   errorText: { fontSize: fontSize.sm, color: colors.error, marginTop: spacing.xs },
   submitButton: { marginTop: spacing.lg },
+  loginRedirect: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.md },
+  loginRedirectText: { fontSize: fontSize.md, color: colors.textSecondary },
+  loginRedirectLink: { fontSize: fontSize.md, color: colors.emergency, fontWeight: '700' },
   locationBox: { backgroundColor: colors.surface, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   locationLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
   locationCoords: { fontSize: fontSize.sm, color: colors.textSecondary, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
