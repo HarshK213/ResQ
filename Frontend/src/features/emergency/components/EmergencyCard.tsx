@@ -30,8 +30,8 @@ const EmergencyCard: React.FC<EmergencyCardProps> = ({ item, onPress }) => {
         {item.resource} - {item.location_name}
       </Text>
 
-      {item.blood_group && (
-        <Text style={styles.bloodGroup}>Blood Group: {item.blood_group}</Text>
+      {item.description && (
+        <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
       )}
 
       <View style={styles.footer}>
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md, ...shadows.md },
   header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
   title: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  bloodGroup: { fontSize: fontSize.md, color: colors.emergency, fontWeight: '600', marginBottom: spacing.xs },
+  description: { fontSize: fontSize.md, color: colors.textSecondary, marginBottom: spacing.xs },
   footer: { flexDirection: 'row', gap: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   footerIcon: { fontSize: fontSize.sm },

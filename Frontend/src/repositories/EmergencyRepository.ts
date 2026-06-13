@@ -22,7 +22,7 @@ function toCardData(r: EmergencyRequest): EmergencyCardData {
     _id: r._id,
     requester_phone: r.requester_phone,
     resource: r.resource,
-    blood_group: r.blood_group,
+    description: r.description,
     urgency: r.urgency,
     location_name: r.location_name,
     status: r.status,

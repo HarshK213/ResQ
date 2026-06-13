@@ -1,5 +1,5 @@
-export type EmergencyResource = 'blood' | 'transport' | 'medicines' | 'food' | 'shelter';
-export type EmergencyUrgency = 'critical' | 'high' | 'medium' | 'low';
+export type EmergencyResource = 'medical' | 'rescue' | 'supplies' | 'transport' | 'other';
+export type EmergencyUrgency = 'high' | 'low';
 export type EmergencySource = 'app' | 'sms';
 export type EmergencyStatus = 'open' | 'matched' | 'assigned' | 'completed' | 'cancelled';
 
@@ -9,7 +9,7 @@ export interface EmergencyRequest {
   requester_phone: string;
   source: EmergencySource;
   resource: EmergencyResource;
-  blood_group: string | null;
+  description: string;
   urgency: EmergencyUrgency;
   location_name: string;
   location: {
@@ -26,7 +26,7 @@ export interface EmergencyRequest {
 
 export interface CreateEmergencyPayload {
   resource: EmergencyResource;
-  blood_group?: string;
+  description: string;
   urgency: EmergencyUrgency;
   location_name: string;
   latitude: number;
@@ -37,7 +37,7 @@ export interface EmergencyCardData {
   _id: string;
   requester_phone: string;
   resource: EmergencyResource;
-  blood_group: string | null;
+  description: string;
   urgency: EmergencyUrgency;
   location_name: string;
   status: EmergencyStatus;
@@ -51,7 +51,7 @@ export interface EmergencyCardData {
 
 export interface EmergencyFormData {
   resource: EmergencyResource;
-  blood_group: string;
+  description: string;
   urgency: EmergencyUrgency;
   location_name: string;
   latitude: number;

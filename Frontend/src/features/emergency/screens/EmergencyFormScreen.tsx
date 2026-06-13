@@ -7,20 +7,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { colors, fontSize, spacing, borderRadius } from '../../../config/theme';
 import Input from '../../../components/Input';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
-import { BLOOD_GROUPS } from '../../../utils/constants';
 import { useEmergency } from '../hooks/useEmergency';
 import { useLocation } from '../../../hooks/useLocation';
 import { useConnectivity } from '../../../hooks/useConnectivity';
 import type { EmergencyResource, EmergencyUrgency, CreateEmergencyPayload } from '../../../types/emergency';
 
-const RESOURCES: EmergencyResource[] = ['blood', 'transport', 'medicines', 'food', 'shelter'];
-const URGENCIES: EmergencyUrgency[] = ['critical', 'high', 'medium', 'low'];
+const RESOURCES: EmergencyResource[] = ['medical', 'rescue', 'supplies', 'transport', 'other'];
+const URGENCIES: EmergencyUrgency[] = ['high', 'low'];
 
 interface EmergencyFormScreenProps {
   navigation: any;
@@ -32,8 +30,8 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
   const { isOnline } = useConnectivity();
 
   const [resource, setResource] = useState<EmergencyResource | null>(null);
-  const [bloodGroup, setBloodGroup] = useState('');
-  const [urgency, setUrgency] = useState<EmergencyUrgency>('medium');
+  const [description, setDescription] = useState('');
+  const [urgency, setUrgency] = useState<EmergencyUrgency>('low');
   const [locationName, setLocationName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -44,7 +42,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!resource) newErrors.resource = 'Select resource type';
-    if (resource === 'blood' && !bloodGroup) newErrors.bloodGroup = 'Blood group required';
+    if (!description.trim()) newErrors.description = 'Describe the emergency';
     if (!locationName.trim()) newErrors.locationName = 'Location is required';
     if (!coordinates) newErrors.location = 'Unable to get your location';
     setErrors(newErrors);
@@ -56,7 +54,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
 
     const payload: CreateEmergencyPayload = {
       resource,
-      blood_group: resource === 'blood' ? bloodGroup : undefined,
+      description: description.trim(),
       urgency,
       location_name: locationName.trim(),
       latitude: coordinates.latitude,
@@ -66,13 +64,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
     const result = await createEmergency(payload);
 
     if (result.success) {
-      if (result.info) {
-        Alert.alert('Emergency Sent', result.info, [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
-      } else {
-        navigation.goBack();
-      }
+      navigation.replace('EmergencyStatus', { emergencyId: result.emergencyId });
     }
   };
 
@@ -89,7 +81,7 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
         {!isOnline && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineBannerText}>
-              Offline mode - Emergency will be sent via SMS
+              You are offline - connect to the internet to send an emergency
             </Text>
           </View>
         )}
@@ -105,19 +97,16 @@ const EmergencyFormScreen: React.FC<EmergencyFormScreenProps> = ({ navigation })
           </View>
           {errors.resource && <Text style={styles.errorText}>{errors.resource}</Text>}
 
-          {resource === 'blood' && (
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Blood Group <Text style={styles.required}>*</Text></Text>
-              <View style={styles.pickerRow}>
-                {BLOOD_GROUPS.map((bg) => (
-                  <TouchableOpacity key={bg} onPress={() => { setBloodGroup(bg); if (errors.bloodGroup) setErrors((p) => ({ ...p, bloodGroup: '' })); }}>
-                    <Badge label={bg} variant={bloodGroup === bg ? 'emergency' : 'default'} size="md" style={styles.option} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {errors.bloodGroup && <Text style={styles.errorText}>{errors.bloodGroup}</Text>}
-            </View>
-          )}
+          <Input
+            label="Describe the Emergency"
+            placeholder="Tell us what happened..."
+            value={description}
+            onChangeText={(v) => { setDescription(v); if (errors.description) setErrors((p) => ({ ...p, description: '' })); }}
+            error={errors.description}
+            multiline
+            numberOfLines={4}
+            required
+          />
 
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabel}>Urgency</Text>

@@ -23,11 +23,11 @@ const variantColors: Record<BadgeVariant, { bg: string; text: string }> = {
 
 export function getEmergencyTypeVariant(type: EmergencyResource): BadgeVariant {
   const map: Record<EmergencyResource, BadgeVariant> = {
-    blood: 'emergency',
-    transport: 'info',
-    medicines: 'warning',
-    food: 'success',
-    shelter: 'default',
+    medical: 'emergency',
+    rescue: 'warning',
+    supplies: 'info',
+    transport: 'success',
+    other: 'default',
   };
   return map[type];
 }

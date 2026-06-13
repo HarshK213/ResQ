@@ -24,7 +24,7 @@ interface EmergencyStore {
   fetchEmergencies: () => Promise<void>;
   fetchMyEmergencies: () => Promise<void>;
   fetchEmergencyById: (id: string) => Promise<void>;
-  createEmergency: (data: CreateEmergencyPayload) => Promise<{ success: boolean; error?: string; info?: string }>;
+  createEmergency: (data: CreateEmergencyPayload) => Promise<{ success: boolean; error?: string; info?: string; emergencyId?: string }>;
   acceptEmergency: (id: string) => Promise<{ success: boolean; error?: string }>;
   updateEmergencyStatus: (id: string, status: string) => Promise<{ success: boolean; error?: string }>;
   cancelEmergency: (id: string) => Promise<void>;
@@ -53,7 +53,7 @@ function toCardData(r: EmergencyRequest): EmergencyCardData {
     _id: r._id,
     requester_phone: r.requester_phone,
     resource: r.resource,
-    blood_group: r.blood_group,
+    description: r.description,
     urgency: r.urgency,
     location_name: r.location_name,
     status: r.status,
@@ -135,10 +135,10 @@ export const useEmergencyStore = create<EmergencyStore>((set, get) => ({
         const result = await emergencyRepository.create(data);
         if (result.success && result.data) {
           await storageService.addEmergency(result.data);
-          set({ isSubmitting: false });
+          set({ isSubmitting: false, currentEmergency: result.data });
           const card = toCardData(result.data);
           set((s) => ({ emergencies: [card, ...s.emergencies] }));
-          return { success: true };
+          return { success: true, emergencyId: result.data._id };
         }
         set({ isSubmitting: false });
         return { success: false, error: result.error || 'Failed to create emergency' };

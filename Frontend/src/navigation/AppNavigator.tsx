@@ -14,6 +14,7 @@ import DashboardScreen from "../features/dashboard/DashboardScreen";
 import EmergencyListScreen from "../features/emergency/screens/EmergencyListScreen";
 import EmergencyFormScreen from "../features/emergency/screens/EmergencyFormScreen";
 import EmergencyDetailScreen from "../features/emergency/screens/EmergencyDetailScreen";
+import EmergencyStatusScreen from "../features/emergency/screens/EmergencyStatusScreen";
 import MyEmergenciesScreen from "../features/emergency/screens/MyEmergenciesScreen";
 import NotificationScreen from "../features/notifications/screens/NotificationScreen";
 import MapScreen from "../features/maps/screens/MapScreen";
@@ -172,6 +173,11 @@ const AppNavigator: React.FC = () => {
 					headerTitle: "New Emergency Request",
 					presentation: "modal",
 				}}
+			/>
+			<Stack.Screen
+				name="EmergencyStatus"
+				component={EmergencyStatusScreen}
+				options={{ headerTitle: "Emergency Status", headerBackVisible: false }}
 			/>
 			<Stack.Screen
 				name="EmergencyDetail"
