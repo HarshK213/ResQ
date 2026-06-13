@@ -117,6 +117,7 @@ class RequestDB(BaseModel):
     location_name: Optional[str] = None
     location: Optional[Location] = None
     raw_message: Optional[str] = None
+    advisory: Optional[str] = None
     status: RequestStatus = RequestStatus.OPEN
     assigned_volunteer: Optional[str] = None
     current_radius_km: float = 5.0

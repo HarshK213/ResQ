@@ -61,6 +61,16 @@ URGENCY_KEYWORDS = {
 }
 
 
+def normalize_urgency(raw: str) -> UrgencyLevel:
+    mapping = {
+        "critical": UrgencyLevel.HIGH,
+        "high": UrgencyLevel.HIGH,
+        "medium": UrgencyLevel.LOW,
+        "low": UrgencyLevel.LOW,
+    }
+    return mapping.get(raw.lower(), UrgencyLevel.HIGH)
+
+
 def verify_webhook_signature(request_body: bytes, timestamp: str, signature: str) -> bool:
     if not settings.SMS_GATE_SIGNING_KEY:
         return True
@@ -265,10 +275,7 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
             except ValueError:
                 pass
         if parsed.urgency:
-            try:
-                urgency = UrgencyLevel(parsed.urgency.lower())
-            except ValueError:
-                pass
+            urgency = normalize_urgency(parsed.urgency)
         if parsed.location_name and not location_name:
             location_name = parsed.location_name
 
@@ -333,6 +340,7 @@ async def process_sms_request(phone: str, message: str, location_name: Optional[
     if instructions:
         prefix = "ResQ Advisory (LOW urgency)" if urgency == UrgencyLevel.LOW else "ResQ First-Aid Tip"
         await sms_service.send_sms(phone, f"{prefix}: {instructions}")
+        await req_repo.update(request_id, {"advisory": instructions})
 
     matching_svc = MatchingService()
     volunteers = await matching_svc.find_matching_volunteers(
